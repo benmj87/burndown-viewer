@@ -114,7 +114,7 @@ function newOption(text, value) {
 
 function loadIssuesForMilestone(milestoneId, projectId, milestone) {
     console.log("Fetching issues for milestone " + milestoneId + " and project " + projectId);
-    console.log("Milestone info: " + milestone);
+    
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
         if (this.readyState == XMLHttpRequest.DONE && this.status == 200) {
@@ -122,19 +122,35 @@ function loadIssuesForMilestone(milestoneId, projectId, milestone) {
             console.log("Received " + issues.length + " issues");
 
             var totalEstimate = 0;
-            var days = 10;
+            var start = new Date(milestone.start_date);
+            var end = new Date(milestone.due_date);
+
+            if (isNaN(start) || isNaN(end)) {
+                console.log("Unable to parse start " + milestone.start_date + " or end date " + milestone.end_date);
+                return;
+            }
+
+            var days = getBusinessDatesCount(start, end);
+            console.log("Businss days in milestone: " + days);
+
             issues.forEach(function(item) {
                 var match = item.title.match(/E[0-9]+/i);
                 if (match == null || match == undefined) {
                     console.log("Invalid description " + item.title);
                 } else {
-                    var estimate = match[0].substring(1, match[0].length); // get rid of the E                
-                    console.log(item.title);
-                    console.log(estimate);
+                    var estimate = match[0].substring(1, match[0].length); // get rid of the E 
                     totalEstimate += parseInt(estimate);
                 }
             });
 
+            milestoneData = [{
+                start: start,
+                end: end,
+                totalPointsCompleted: totalEstimate,
+                pointsPerDay: totalEstimate / days
+            }];
+
+            calculateGraph(milestoneData, totalEstimate);
             
             console.log("Total completed in milestone " + milestoneId + "\r\n\t" + totalEstimate + " in " + days + " days at " + totalEstimate / days + " points per day");
         }
@@ -143,4 +159,45 @@ function loadIssuesForMilestone(milestoneId, projectId, milestone) {
     xhttp.open("GET", apiUrl + '/projects/' + projectId + '/milestones/' + milestoneId + '/issues', true);
     xhttp.setRequestHeader("PRIVATE-TOKEN", apiKey);
     xhttp.send();
+}
+
+var milestoneData = [];
+function calculateGraph(milestones, totalPoints) {
+    console.log(milestones.length);
+    var gdata = [];
+    var avgperday = milestones[0].totalPointsCompleted / getDaysCount(milestones[0].start, milestones[0].end);
+    var curDate = milestones[0].start;
+    var curpoints = totalPoints;
+    while (curDate <= milestones[0].end) {
+        gdata.push.apply(gdata, [[curDate.getTime(), curpoints]]);
+        curpoints -= avgperday;
+        curDate.setDate(curDate.getDate() + 1);
+    }
+
+    $.plot("#graph", [ gdata ]);
+}
+
+// yoink: http://stackoverflow.com/questions/29933608/how-to-calculate-the-total-days-between-two-selected-calendar-dates
+function getBusinessDatesCount(startDate, endDate) {
+    var count = 0;
+    var curDate = new Date(startDate);
+    while (curDate <= endDate) {
+        var dayOfWeek = curDate.getDay();
+        if(!((dayOfWeek == 6) || (dayOfWeek == 0)))
+           count++;
+        curDate.setDate(curDate.getDate() + 1);
+    }
+    return count;
+}
+
+// yoink: http://stackoverflow.com/questions/29933608/how-to-calculate-the-total-days-between-two-selected-calendar-dates
+function getDaysCount(startDate, endDate) {
+    var count = 0;
+    var curDate = new Date(startDate);
+    while (curDate <= endDate) {
+        var dayOfWeek = curDate.getDay();
+        count++;
+        curDate.setDate(curDate.getDate() + 1);
+    }
+    return count;
 }
