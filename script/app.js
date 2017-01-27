@@ -10,9 +10,14 @@ window.onload = function() {
 
     document.getElementById("milestoneSelect").onchange = function (e) {
         var sel = document.getElementById("projectSelect");
-        var milestone = findMilestone(e.target.value);
+        var milestones = selectedOptions(e.target);
 
-        loadIssuesForMilestone(e.target.value, sel.options[sel.selectedIndex].value, milestone);
+        allmilestoneissuecount = 0;
+        milestoneData = [];
+        for (var i = 0; i < milestones.length; i++) {
+            var milestone = findMilestone(milestones[i]);
+            loadIssuesForMilestone(milestones[i], sel.options[sel.selectedIndex].value, milestone);
+        }
     }
 }
 
@@ -84,9 +89,16 @@ function loadProjectsComplete() {
     loadMilestones(46);
 }
 
+function clearList(dropdown) {
+    for (var i = 0; i < dropdown.options.length; i++) {
+        dropdown.options[i] = null;
+    }
+}
+
 function loadMilestones(id) {
     console.log("Fetching milestones for project " + id);
     var xhttp = new XMLHttpRequest();
+    clearList(document.getElementById("milestoneSelect"));
     xhttp.onreadystatechange = function() {
         if (this.readyState == XMLHttpRequest.DONE && this.status == 200) {
             var milestones = JSON.parse(this.responseText);
@@ -100,7 +112,7 @@ function loadMilestones(id) {
         }
     };
 
-    xhttp.open("GET", apiUrl + '/projects/' + id + '/milestones', true);
+    xhttp.open("GET", apiUrl + '/projects/' + id + '/milestones?state=closed', true);
     xhttp.setRequestHeader("PRIVATE-TOKEN", apiKey);
     xhttp.send();
 }
@@ -112,6 +124,7 @@ function newOption(text, value) {
     return option;
 }
 
+var allmilestoneissuecount = 0;
 function loadIssuesForMilestone(milestoneId, projectId, milestone) {
     console.log("Fetching issues for milestone " + milestoneId + " and project " + projectId);
     
@@ -143,21 +156,35 @@ function loadIssuesForMilestone(milestoneId, projectId, milestone) {
                 }
             });
 
-            milestoneData = [{
+            allmilestoneissuecount += totalEstimate;
+            milestoneData.push.apply(milestoneData, [{
                 start: start,
                 end: end,
                 totalPointsCompleted: totalEstimate,
                 pointsPerDay: totalEstimate / days
-            }];
+            }]);
             
-            console.log("Total completed in milestone " + milestoneId + "\r\n\t" + totalEstimate + " in " + days + " days at " + totalEstimate / days + " points per day");
-            loadOpenIssues(projectId, totalEstimate / days, totalEstimate);
+            if (milestoneData.length == selectedOptions(document.getElementById("milestoneSelect")).length) {
+                console.log("Total completed in milestone " + milestoneId + "\r\n\t" + totalEstimate + " in " + days + " days at " + totalEstimate / days + " points per day");
+                loadOpenIssues(projectId, totalEstimate / days, allmilestoneissuecount);
+            }
         }
     };
 
     xhttp.open("GET", apiUrl + '/projects/' + projectId + '/milestones/' + milestoneId + '/issues?state=closed', true);
     xhttp.setRequestHeader("PRIVATE-TOKEN", apiKey);
     xhttp.send();
+}
+
+function selectedOptions(dropdown) {
+    var items = [];
+    for (var i = 0; i < dropdown.options.length; i++) {
+        if (dropdown.options[i].selected) {
+            items.push.apply(items, [dropdown.options[i].value]);
+        }
+    }
+
+    return items;
 }
 
 function loadOpenIssues(projectId, avgperday, totalCompletedPoints) {
@@ -192,18 +219,22 @@ function loadOpenIssues(projectId, avgperday, totalCompletedPoints) {
 
 var milestoneData = [];
 function calculateGraph(milestones, totalPoints) {
-    console.log(milestones.length);
+    milestones = milestones.sort((a, b) => a.start > b.start);
     var gdata = [];
     var incomplete = [];
-    var avgperday = milestones[0].totalPointsCompleted / getDaysCount(milestones[0].start, milestones[0].end);
-    var curDate = milestones[0].start;
     var curpoints = totalPoints;
-    while (curDate <= milestones[0].end) {
-        gdata.push.apply(gdata, [[curDate.getTime(), curpoints]]);
-        curpoints -= avgperday;
-        curDate.setDate(curDate.getDate() + 1);
+
+    for (var i = 0; i < milestones.length; i++) {
+        var avgperday = milestones[i].totalPointsCompleted / getDaysCount(milestones[i].start, milestones[i].end);
+        var curDate = milestones[i].start;
+        while (curDate <= milestones[i].end) {
+            gdata.push.apply(gdata, [[curDate.getTime(), curpoints]]);
+            curpoints -= avgperday;
+            curDate.setDate(curDate.getDate() + 1);
+        }
     }
     
+    // if any points are left, estimate the remaining
     if (curpoints >0) {
         var today = new Date();
         while (curDate < today) {
