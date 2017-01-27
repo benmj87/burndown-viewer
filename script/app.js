@@ -149,14 +149,43 @@ function loadIssuesForMilestone(milestoneId, projectId, milestone) {
                 totalPointsCompleted: totalEstimate,
                 pointsPerDay: totalEstimate / days
             }];
-
-            calculateGraph(milestoneData, totalEstimate);
             
             console.log("Total completed in milestone " + milestoneId + "\r\n\t" + totalEstimate + " in " + days + " days at " + totalEstimate / days + " points per day");
+            loadOpenIssues(projectId, totalEstimate / days, totalEstimate);
         }
     };
 
-    xhttp.open("GET", apiUrl + '/projects/' + projectId + '/milestones/' + milestoneId + '/issues', true);
+    xhttp.open("GET", apiUrl + '/projects/' + projectId + '/milestones/' + milestoneId + '/issues?state=closed', true);
+    xhttp.setRequestHeader("PRIVATE-TOKEN", apiKey);
+    xhttp.send();
+}
+
+function loadOpenIssues(projectId, avgperday, totalCompletedPoints) {
+    console.log("Fetching open issues for project " + projectId);
+    
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+        if (this.readyState == XMLHttpRequest.DONE && this.status == 200) {
+            var issues = JSON.parse(this.responseText);
+            console.log("Received " + issues.length + " open issues");
+
+            var totalEstimate = 0;
+            issues.forEach(function(item) {
+                var match = item.title.match(/E[0-9]+/i);
+                if (match == null || match == undefined) {
+                    console.log("Invalid description " + item.title);
+                } else {
+                    var estimate = match[0].substring(1, match[0].length); // get rid of the E 
+                    totalEstimate += parseInt(estimate);
+                }
+            });
+            
+            calculateGraph(milestoneData, totalEstimate + totalCompletedPoints);
+            console.log("Open issues\r\n\t" + totalEstimate + " points remaining");
+        }
+    };
+
+    xhttp.open("GET", apiUrl + '/projects/' + projectId + '/issues?state=opened', true);
     xhttp.setRequestHeader("PRIVATE-TOKEN", apiKey);
     xhttp.send();
 }
@@ -165,6 +194,7 @@ var milestoneData = [];
 function calculateGraph(milestones, totalPoints) {
     console.log(milestones.length);
     var gdata = [];
+    var incomplete = [];
     var avgperday = milestones[0].totalPointsCompleted / getDaysCount(milestones[0].start, milestones[0].end);
     var curDate = milestones[0].start;
     var curpoints = totalPoints;
@@ -173,8 +203,28 @@ function calculateGraph(milestones, totalPoints) {
         curpoints -= avgperday;
         curDate.setDate(curDate.getDate() + 1);
     }
+    
+    if (curpoints >0) {
+        var today = new Date();
+        while (curDate < today) {
+            incomplete.push.apply(incomplete,[[curDate.getTime(), curpoints]]);
+            curDate.setDate(curDate.getDate() + 1);
+        }
 
-    $.plot("#graph", [ gdata ]);
+        while (curpoints > 0) {
+            incomplete.push.apply(incomplete, [[curDate.getTime(), curpoints]]);
+            curpoints -= avgperday;
+            curDate.setDate(curDate.getDate() + 1);
+        }
+    }
+
+    $.plot("#graph", [ gdata, incomplete ], {
+        xaxis: {
+            mode: 'time',
+            minTickSize: [1, 'day'],
+            timeformat: '%d/%m/%y'
+        }
+    });
 }
 
 // yoink: http://stackoverflow.com/questions/29933608/how-to-calculate-the-total-days-between-two-selected-calendar-dates
