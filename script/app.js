@@ -1,5 +1,4 @@
-var apiKey = "";
-var apiUrl = "";
+var api;
 
 window.onload = function() {
     loadSettings();
@@ -32,13 +31,18 @@ function findMilestone(id) {
 }
 
 function loadSettings() {
+    console.log("Loading settings from apikey.json");
+
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
-        if (this.readyState == XMLHttpRequest.DONE && this.status == 200) {
-            var data = JSON.parse(this.responseText);
-            apiKey = data.apiKey;
-            apiUrl = data.url;
-            loadAllProjects();
+        if (xhttp.readyState == XMLHttpRequest.DONE && xhttp.status == 200) {
+            var data = JSON.parse(xhttp.responseText);
+            api = new GitlabAPI(data);
+            api.loadAllProjects(
+                (p) => loadProjectsComplete(p), 
+                (m) => console.log("Error message: " + m));
+        } else if (xhttp.readyState == XMLHttpRequest.DONE) {
+            console.log("Error loading settings from apikey.json: " + xhttp.status + xhttp.statusText);
         }
     };
 
@@ -46,47 +50,16 @@ function loadSettings() {
     xhttp.send();
 }
 
-var currentPage = 0;
-var allProjects = [];
 var allMilestones = [];
 
-function loadAllProjects() {
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == XMLHttpRequest.DONE && this.status == 200) {
-            var projects = JSON.parse(this.responseText);
-            console.log("loaded page " + currentPage + " of projects");
-            allProjects.push.apply(allProjects, projects);
-
-            if (projects.length > 0) {
-                currentPage++;
-                loadAllProjects()
-            } else {
-                loadProjectsComplete();
-            }
-        }
-    };
-
-    xhttp.open("GET", apiUrl + '/projects/all?page=' + currentPage, true);
-    xhttp.setRequestHeader("PRIVATE-TOKEN", apiKey);
-    xhttp.send();
-}
-
-function loadProjectsComplete() {
+function loadProjectsComplete(allProjects) {
     console.log("All projects load complete, loaded " + allProjects.length);
-
-    allProjects.sort(function(a, b) {
-        return a.name_with_namespace.localeCompare(b.name_with_namespace);
-    });
 
     var projSelect = document.getElementById("projectSelect");
     for (var i = 0; i < allProjects.length; i++) {
         var opt = newOption(allProjects[i].name_with_namespace, allProjects[i].id);
         projSelect.appendChild(opt);
     }
-
-    projSelect.value = 46; // for debugging select pl2
-    loadMilestones(46);
 }
 
 function clearList(dropdown) {
