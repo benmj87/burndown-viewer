@@ -3,31 +3,26 @@ var api;
 window.onload = function() {
     loadSettings();
     document.getElementById("projectSelect").onchange = function(e) {
-        allMilestones = [];
-        loadMilestones(e.target.value);
+        api.loadMilestones(
+            e.target.value, 
+            (m) => loadMilestonesComplete(m), 
+            (m) => console.log("Error loading milestones: " + m));
     }
 
-    document.getElementById("milestoneSelect").onchange = function (e) {
-        var sel = document.getElementById("projectSelect");
-        var milestones = selectedOptions(e.target);
+    document.getElementById("milestoneSelect").onchange = function(e) {
+        var projSel = document.getElementById("projectSelect");
+        var milestones = getSelectedOptions(e.target);
+        var projId = projSel.options[projSel.selectedIndex].value;
 
-        allmilestoneissuecount = 0;
-        milestoneData = [];
+        totalIssueCount = 0;
         for (var i = 0; i < milestones.length; i++) {
-            var milestone = findMilestone(milestones[i]);
-            loadIssuesForMilestone(milestones[i], sel.options[sel.selectedIndex].value, milestone);
+            api.loadIssuesForMilestone(
+                milestones[i], 
+                projId,
+                (a, b, c) => loadIssuesComplete(a, b, c),
+                (m) => console.log("Error loading issues for milestone: " + m));
         }
     }
-}
-
-function findMilestone(id) {
-    for (var i = 0; i < allMilestones.length; i++) {
-        if (allMilestones[i].id == id) {
-            return allMilestones[i];
-        }
-    }
-    
-    return null;
 }
 
 function loadSettings() {
@@ -50,8 +45,6 @@ function loadSettings() {
     xhttp.send();
 }
 
-var allMilestones = [];
-
 function loadProjectsComplete(allProjects) {
     console.log("All projects load complete, loaded " + allProjects.length);
 
@@ -62,32 +55,56 @@ function loadProjectsComplete(allProjects) {
     }
 }
 
+function loadMilestonesComplete(allMilestones, projectId) {
+    var milestoneSelect = document.getElementById("milestoneSelect");
+    clearList(milestoneSelect);
+    for (var i = 0; i < allMilestones.length; i++) {
+        var opt = newOption(allMilestones[i].title, allMilestones[i].id);
+        milestoneSelect.appendChild(opt);
+    }
+}
+
+var totalIssueCount = 0;
+function loadIssuesComplete(issues, milestoneId, projectId) {
+    var totalEstimate = 0;
+    var milestone = api.findMilestone(milestoneId);
+    var start = new Date(milestone.start_date);
+    var end = new Date(milestone.due_date);
+
+    if (isNaN(start) || isNaN(end)) {
+        console.log("Unable to parse start " + milestone.start_date + " or end date " + milestone.end_date);
+        return;
+    }
+
+    var days = getBusinessDatesCount(start, end);
+    issues.forEach(function(item) {
+        var match = item.title.match(/E[0-9]+/i);
+        if (match == null || match == undefined) {
+            console.log("Invalid description " + item.title);
+        } else {
+            var estimate = match[0].substring(1, match[0].length); // get rid of the E 
+            totalEstimate += parseInt(estimate);
+        }
+    });
+
+    totalIssueCount += totalEstimate;
+    milestoneData.push.apply(milestoneData, [{
+        start: start,
+        end: end,
+        totalPointsCompleted: totalEstimate,
+        pointsPerDay: totalEstimate / days
+    }]);
+    
+    if (milestoneData.length == getSelectedOptions(document.getElementById("milestoneSelect")).length) {
+        console.log("Total completed in milestone " + milestoneId + "\r\n\t" + totalEstimate + " in " + days + " days at " + totalEstimate / days + " points per day");
+        // loadOpenIssues(projectId, totalEstimate / days, allmilestoneissuecount);
+    }
+}
+
 function clearList(dropdown) {
     for (var i = 0; i < dropdown.options.length; i++) {
         dropdown.options[i] = null;
     }
-}
-
-function loadMilestones(id) {
-    console.log("Fetching milestones for project " + id);
-    var xhttp = new XMLHttpRequest();
-    clearList(document.getElementById("milestoneSelect"));
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == XMLHttpRequest.DONE && this.status == 200) {
-            var milestones = JSON.parse(this.responseText);
-            allMilestones.push.apply(allMilestones, milestones);
-            var milestoneSelect = document.getElementById("milestoneSelect");
-
-            for (var i = 0; i < milestones.length; i++) {
-                var opt = newOption(milestones[i].title, milestones[i].id);
-                milestoneSelect.appendChild(opt);
-            }
-        }
-    };
-
-    xhttp.open("GET", apiUrl + '/projects/' + id + '/milestones?state=closed', true);
-    xhttp.setRequestHeader("PRIVATE-TOKEN", apiKey);
-    xhttp.send();
 }
 
 function newOption(text, value) {
@@ -97,59 +114,7 @@ function newOption(text, value) {
     return option;
 }
 
-var allmilestoneissuecount = 0;
-function loadIssuesForMilestone(milestoneId, projectId, milestone) {
-    console.log("Fetching issues for milestone " + milestoneId + " and project " + projectId);
-    
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == XMLHttpRequest.DONE && this.status == 200) {
-            var issues = JSON.parse(this.responseText);
-            console.log("Received " + issues.length + " issues");
-
-            var totalEstimate = 0;
-            var start = new Date(milestone.start_date);
-            var end = new Date(milestone.due_date);
-
-            if (isNaN(start) || isNaN(end)) {
-                console.log("Unable to parse start " + milestone.start_date + " or end date " + milestone.end_date);
-                return;
-            }
-
-            var days = getBusinessDatesCount(start, end);
-            console.log("Businss days in milestone: " + days);
-
-            issues.forEach(function(item) {
-                var match = item.title.match(/E[0-9]+/i);
-                if (match == null || match == undefined) {
-                    console.log("Invalid description " + item.title);
-                } else {
-                    var estimate = match[0].substring(1, match[0].length); // get rid of the E 
-                    totalEstimate += parseInt(estimate);
-                }
-            });
-
-            allmilestoneissuecount += totalEstimate;
-            milestoneData.push.apply(milestoneData, [{
-                start: start,
-                end: end,
-                totalPointsCompleted: totalEstimate,
-                pointsPerDay: totalEstimate / days
-            }]);
-            
-            if (milestoneData.length == selectedOptions(document.getElementById("milestoneSelect")).length) {
-                console.log("Total completed in milestone " + milestoneId + "\r\n\t" + totalEstimate + " in " + days + " days at " + totalEstimate / days + " points per day");
-                loadOpenIssues(projectId, totalEstimate / days, allmilestoneissuecount);
-            }
-        }
-    };
-
-    xhttp.open("GET", apiUrl + '/projects/' + projectId + '/milestones/' + milestoneId + '/issues?state=closed', true);
-    xhttp.setRequestHeader("PRIVATE-TOKEN", apiKey);
-    xhttp.send();
-}
-
-function selectedOptions(dropdown) {
+function getSelectedOptions(dropdown) {
     var items = [];
     for (var i = 0; i < dropdown.options.length; i++) {
         if (dropdown.options[i].selected) {
