@@ -1,7 +1,13 @@
-var api;
+var api; // holds the reference to gitlabAPI.js
+var milestoneData = []; // the data relating to each milestone to render in the graph
+var totalIssueCount = 0; // the total points calculated when loading all issues
+
+var issueCallsCompleted = 0; // used to sync all of the calls to fetch the issues for each milestone and remaining opened issues
+var expectedIssueCalls = 0; // what ^^ he said
 
 window.onload = function() {
     loadSettings();
+
     document.getElementById("projectSelect").onchange = function(e) {
         api.loadMilestones(
             e.target.value, 
@@ -14,14 +20,28 @@ window.onload = function() {
         var milestones = getSelectedOptions(e.target);
         var projId = projSel.options[projSel.selectedIndex].value;
 
+        milestoneData = [];
         totalIssueCount = 0;
+        issueCallsCompleted = 0;
+        expectedIssueCalls = 0;
+
         for (var i = 0; i < milestones.length; i++) {
-            api.loadIssuesForMilestone(
+            expectedIssueCalls++;
+            api.loadIssues(
                 milestones[i], 
                 projId,
-                (a, b, c) => loadIssuesComplete(a, b, c),
-                (m) => console.log("Error loading issues for milestone: " + m));
+                'closed',
+                (i, m, p) => loadIssuesComplete(i, m, p),
+                (m) => console.log("Error loading issues for milestone: " + m) & issueCallsCompleted++);
         }
+
+        expectedIssueCalls++;   
+        api.loadIssues(
+            null, 
+            projId,
+            'opened',
+            (i, m, p) => loadOpenIssuesComplete(i, m, p),
+            (m) => console.log("Error loading open issues: " + m) & issueCallsCompleted++);
     }
 }
 
@@ -64,8 +84,8 @@ function loadMilestonesComplete(allMilestones, projectId) {
     }
 }
 
-var totalIssueCount = 0;
 function loadIssuesComplete(issues, milestoneId, projectId) {
+    issueCallsCompleted++;
     var totalEstimate = 0;
     var milestone = api.findMilestone(milestoneId);
     var start = new Date(milestone.start_date);
@@ -78,13 +98,7 @@ function loadIssuesComplete(issues, milestoneId, projectId) {
 
     var days = getBusinessDatesCount(start, end);
     issues.forEach(function(item) {
-        var match = item.title.match(/E[0-9]+/i);
-        if (match == null || match == undefined) {
-            console.log("Invalid description " + item.title);
-        } else {
-            var estimate = match[0].substring(1, match[0].length); // get rid of the E 
-            totalEstimate += parseInt(estimate);
-        }
+        totalEstimate += getEstimate(item);
     });
 
     totalIssueCount += totalEstimate;
@@ -94,68 +108,39 @@ function loadIssuesComplete(issues, milestoneId, projectId) {
         totalPointsCompleted: totalEstimate,
         pointsPerDay: totalEstimate / days
     }]);
+
+    checkIssuesComplete();
+}
+
+function loadOpenIssuesComplete(issues, milestoneId, projectId) {
+    issueCallsCompleted++;
+    var totalEstimate = 0;
+
+    issues.forEach(function(item) {
+        totalEstimate += getEstimate(item);
+    });
     
-    if (milestoneData.length == getSelectedOptions(document.getElementById("milestoneSelect")).length) {
-        console.log("Total completed in milestone " + milestoneId + "\r\n\t" + totalEstimate + " in " + days + " days at " + totalEstimate / days + " points per day");
-        // loadOpenIssues(projectId, totalEstimate / days, allmilestoneissuecount);
+    totalIssueCount += totalEstimate;
+    checkIssuesComplete();
+}
+
+function checkIssuesComplete() {
+    if (issueCallsCompleted == expectedIssueCalls) {
+        calculateGraph(milestoneData, totalIssueCount);
     }
 }
 
-function clearList(dropdown) {
-    for (var i = 0; i < dropdown.options.length; i++) {
-        dropdown.options[i] = null;
+function getEstimate(issue) {
+    var match = issue.title.match(/E[0-9]+/i);
+    if (match == null || match == undefined) {
+        console.log("Invalid description " + issue.title);
+        return 0;
+    } else {
+        var estimate = match[0].substring(1, match[0].length); // get rid of the E 
+        return parseInt(estimate);
     }
 }
 
-function newOption(text, value) {
-    var option = document.createElement("option");
-    option.text = text;
-    option.value = value;
-    return option;
-}
-
-function getSelectedOptions(dropdown) {
-    var items = [];
-    for (var i = 0; i < dropdown.options.length; i++) {
-        if (dropdown.options[i].selected) {
-            items.push.apply(items, [dropdown.options[i].value]);
-        }
-    }
-
-    return items;
-}
-
-function loadOpenIssues(projectId, avgperday, totalCompletedPoints) {
-    console.log("Fetching open issues for project " + projectId);
-    
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-        if (this.readyState == XMLHttpRequest.DONE && this.status == 200) {
-            var issues = JSON.parse(this.responseText);
-            console.log("Received " + issues.length + " open issues");
-
-            var totalEstimate = 0;
-            issues.forEach(function(item) {
-                var match = item.title.match(/E[0-9]+/i);
-                if (match == null || match == undefined) {
-                    console.log("Invalid description " + item.title);
-                } else {
-                    var estimate = match[0].substring(1, match[0].length); // get rid of the E 
-                    totalEstimate += parseInt(estimate);
-                }
-            });
-            
-            calculateGraph(milestoneData, totalEstimate + totalCompletedPoints);
-            console.log("Open issues\r\n\t" + totalEstimate + " points remaining");
-        }
-    };
-
-    xhttp.open("GET", apiUrl + '/projects/' + projectId + '/issues?state=opened', true);
-    xhttp.setRequestHeader("PRIVATE-TOKEN", apiKey);
-    xhttp.send();
-}
-
-var milestoneData = [];
 function calculateGraph(milestones, totalPoints) {
     milestones = milestones.sort((a, b) => a.start > b.start);
     var gdata = [];

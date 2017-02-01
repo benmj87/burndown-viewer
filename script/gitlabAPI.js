@@ -63,8 +63,14 @@ class GitlabAPI {
         return null;
     }
 
-    loadIssuesForMilestone(milestoneId, projectId, success, error) {
-        console.log("Fetching issues for milestone " + milestoneId + " and project " + projectId);
+    loadIssues(milestoneId, projectId, state, success, error) {
+        if (milestoneId == null || milestoneId == undefined) {
+            console.log("Fetching " + state + " issues for project " + projectId);
+            var url = this.apiUrl + '/projects/' + projectId + '/issues?state=' + state;
+        } else {
+            console.log("Fetching " + state + " issues for milestone " + milestoneId + " and project " + projectId);
+            var url = this.apiUrl + '/projects/' + projectId + '/milestones/' + milestoneId + '/issues?state=' + state;
+        }
         
         var xhttp = new XMLHttpRequest();
         xhttp.onreadystatechange = function() {
@@ -77,7 +83,7 @@ class GitlabAPI {
             }
         };
 
-        xhttp.open("GET", this.apiUrl + '/projects/' + projectId + '/milestones/' + milestoneId + '/issues?state=closed', true);
+        xhttp.open("GET", url, true);
         xhttp.setRequestHeader("PRIVATE-TOKEN", this.apiKey);
         xhttp.send();
     }
