@@ -137,6 +137,7 @@ function loadOpenIssuesComplete(issues, milestoneId, projectId) {
 }
 
 function checkIssuesComplete() {
+    // all the load issue calls for each milestone and remaining open issues have returned
     if (issueCallsCompleted == expectedIssueCalls) {
         calculateGraph(milestoneData, totalIssueCount);
     }
@@ -154,23 +155,30 @@ function getEstimate(issue) {
     return 0;
 }
 
-
-
 function calculateGraph(milestones, totalPoints) {
     if (milestones.length > 0 && totalPoints > 0) {
         milestones = milestones.sort((a, b) => a.start.getTime() - b.start.getTime());
 
         var gdata = [];
-        var incomplete = [];
         var curpoints = totalPoints;
         var avgForProject = 0;
+        var worstAvg = 0;
+        var bestAvg = 0;
         var totalDays = 0;
 
         for (var i = 0; i < milestones.length; i++) {
-            console.log(milestones[i].name + " Start: " + milestones[i].start + " end: " + milestones[i].end);
             var avgperday = milestones[i].totalPointsCompleted / getDaysCount(milestones[i].start, milestones[i].end);
+            if (worstAvg == 0 || worstAvg > avgperday) {
+                worstAvg = avgperday;
+            }
+            if (avgperday > bestAvg) {
+                bestAvg = avgperday;
+            }
+
             avgForProject += avgperday;
             totalDays++;
+
+            // plot the milestones 
             var curDate = milestones[i].start;
             while (curDate <= milestones[i].end) {
                 gdata.push.apply(gdata, [[curDate.getTime(), curpoints]]);
@@ -181,16 +189,34 @@ function calculateGraph(milestones, totalPoints) {
 
         avgForProject = avgForProject / totalDays;    
 
-        // if any points are left, estimate the remaining
-        if (curpoints > 0) {        
-            while (curpoints > 0) {
-                incomplete.push.apply(incomplete, [[curDate.getTime(), curpoints]]);
-                curpoints -= avgForProject;
+        // if any points are left, estimate the remaining and plot the avg, best and worst cases
+        if (curpoints > 0) {
+            var curPointsAvg = curpoints;
+            var curPointsWorst = curpoints;
+            var curPointsBest = curpoints;
+            var incompleteAvg = [];
+            var incompleteWorst = [];
+            var incompleteBest = [];
+
+            while (curPointsAvg > 0 || curPointsWorst > 0 || curPointsBest > 0) {
+                if (curPointsAvg > 0) {
+                    incompleteAvg.push.apply(incompleteAvg, [[curDate.getTime(), curPointsAvg]]);
+                    curPointsAvg -= avgForProject;
+                }
+                if (curPointsWorst > 0) {
+                    incompleteWorst.push.apply(incompleteWorst, [[curDate.getTime(), curPointsWorst]]);
+                    curPointsWorst -= worstAvg;
+                }
+                if (curPointsBest > 0) {
+                    incompleteBest.push.apply(incompleteBest, [[curDate.getTime(), curPointsBest]]);
+                    curPointsBest -= bestAvg;
+                }
+
                 curDate.setDate(curDate.getDate() + 1);
             }
         }
 
-        $.plot("#graph", [ gdata, incomplete ], {
+        $.plot("#graph", [ gdata, incompleteAvg, incompleteWorst, incompleteBest ], {
             xaxis: {
                 mode: 'time',
                 minTickSize: [1, 'day'],
