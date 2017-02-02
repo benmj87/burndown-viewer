@@ -9,6 +9,9 @@ window.onload = function() {
     loadSettings();
 
     document.getElementById("projectSelect").onchange = function(e) {
+        $.plot("#graph", [], {}); // clear the graph
+        document.getElementById("milestoneSelect").options.length = 0; // clear milestones
+
         api.loadMilestones(
             e.target.value, 
             (m) => loadMilestonesComplete(m), 
@@ -16,6 +19,8 @@ window.onload = function() {
     }
 
     document.getElementById("milestoneSelect").onchange = function(e) {
+        $.plot("#graph", [], {}); // clear the graph
+        
         var projSel = document.getElementById("projectSelect");
         var milestones = getSelectedOptions(e.target);
         var projId = projSel.options[projSel.selectedIndex].value;
@@ -77,7 +82,7 @@ function loadProjectsComplete(allProjects) {
 
 function loadMilestonesComplete(allMilestones, projectId) {
     var milestoneSelect = document.getElementById("milestoneSelect");
-    clearList(milestoneSelect);
+    milestoneSelect.options.length = 0; // clear
     for (var i = 0; i < allMilestones.length; i++) {
         var opt = newOption(allMilestones[i].title, allMilestones[i].id);
         milestoneSelect.appendChild(opt);
@@ -88,11 +93,17 @@ function loadIssuesComplete(issues, milestoneId, projectId) {
     issueCallsCompleted++;
     var totalEstimate = 0;
     var milestone = api.findMilestone(milestoneId);
+
+    if (milestone.start_date == null || milestone.due_date == null) {
+        console.log("Start or end date of milestone " + milestoneId + " hasn't been populated");
+        return;
+    }
+
     var start = new Date(milestone.start_date);
     var end = new Date(milestone.due_date);
 
     if (isNaN(start) || isNaN(end)) {
-        console.log("Unable to parse start " + milestone.start_date + " or end date " + milestone.end_date);
+        console.log("Unable to parse start " + milestone.start_date + " or end date " + milestone.due_date);
         return;
     }
 
@@ -106,7 +117,8 @@ function loadIssuesComplete(issues, milestoneId, projectId) {
         start: start,
         end: end,
         totalPointsCompleted: totalEstimate,
-        pointsPerDay: totalEstimate / days
+        pointsPerDay: totalEstimate / days,
+        name: milestone.title
     }]);
 
     checkIssuesComplete();
@@ -131,54 +143,61 @@ function checkIssuesComplete() {
 }
 
 function getEstimate(issue) {
-    var match = issue.title.match(/E[0-9]+/i);
-    if (match == null || match == undefined) {
-        console.log("Invalid description " + issue.title);
-        return 0;
-    } else {
-        var estimate = match[0].substring(1, match[0].length); // get rid of the E 
-        return parseInt(estimate);
-    }
-}
-
-function calculateGraph(milestones, totalPoints) {
-    milestones = milestones.sort((a, b) => a.start > b.start);
-    var gdata = [];
-    var incomplete = [];
-    var curpoints = totalPoints;
-
-    for (var i = 0; i < milestones.length; i++) {
-        var avgperday = milestones[i].totalPointsCompleted / getDaysCount(milestones[i].start, milestones[i].end);
-        var curDate = milestones[i].start;
-        while (curDate <= milestones[i].end) {
-            gdata.push.apply(gdata, [[curDate.getTime(), curpoints]]);
-            curpoints -= avgperday;
-            curDate.setDate(curDate.getDate() + 1);
-        }
+    if (issue.title.match(/E([0-9]+)/i)) {
+        // match E10 in the title
+        return parseInt(issue.title.match(/E([0-9]+)/i)[1]);
+    } else if (issue.title.match(/\[([0-9]+)\]/i)) {
+        // match [10] in the title
+        return parseInt(issue.title.match(/\[([0-9]+)\]/i)[1]);
     }
     
-    // if any points are left, estimate the remaining
-    if (curpoints >0) {
-        var today = new Date();
-        while (curDate < today) {
-            incomplete.push.apply(incomplete,[[curDate.getTime(), curpoints]]);
-            curDate.setDate(curDate.getDate() + 1);
+    return 0;
+}
+
+
+
+function calculateGraph(milestones, totalPoints) {
+    if (milestones.length > 0 && totalPoints > 0) {
+        milestones = milestones.sort((a, b) => a.start.getTime() - b.start.getTime());
+
+        var gdata = [];
+        var incomplete = [];
+        var curpoints = totalPoints;
+        var avgForProject = 0;
+        var totalDays = 0;
+
+        for (var i = 0; i < milestones.length; i++) {
+            console.log(milestones[i].name + " Start: " + milestones[i].start + " end: " + milestones[i].end);
+            var avgperday = milestones[i].totalPointsCompleted / getDaysCount(milestones[i].start, milestones[i].end);
+            avgForProject += avgperday;
+            totalDays++;
+            var curDate = milestones[i].start;
+            while (curDate <= milestones[i].end) {
+                gdata.push.apply(gdata, [[curDate.getTime(), curpoints]]);
+                curpoints -= avgperday;
+                curDate.setDate(curDate.getDate() + 1);
+            }
         }
 
-        while (curpoints > 0) {
-            incomplete.push.apply(incomplete, [[curDate.getTime(), curpoints]]);
-            curpoints -= avgperday;
-            curDate.setDate(curDate.getDate() + 1);
+        avgForProject = avgForProject / totalDays;    
+
+        // if any points are left, estimate the remaining
+        if (curpoints > 0) {        
+            while (curpoints > 0) {
+                incomplete.push.apply(incomplete, [[curDate.getTime(), curpoints]]);
+                curpoints -= avgForProject;
+                curDate.setDate(curDate.getDate() + 1);
+            }
         }
+
+        $.plot("#graph", [ gdata, incomplete ], {
+            xaxis: {
+                mode: 'time',
+                minTickSize: [1, 'day'],
+                timeformat: '%d/%m/%y'
+            }
+        });
     }
-
-    $.plot("#graph", [ gdata, incomplete ], {
-        xaxis: {
-            mode: 'time',
-            minTickSize: [1, 'day'],
-            timeformat: '%d/%m/%y'
-        }
-    });
 }
 
 // yoink: http://stackoverflow.com/questions/29933608/how-to-calculate-the-total-days-between-two-selected-calendar-dates

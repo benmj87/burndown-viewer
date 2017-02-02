@@ -36,7 +36,8 @@ class GitlabAPI {
     
     loadMilestones(projectId, success, error) {
         console.log("Fetching milestones for project " + projectId);
-
+        
+        this.allMilestones = []; // clear 
         var xhttp = new XMLHttpRequest();
         xhttp.onreadystatechange = () => {
             if (xhttp.readyState == XMLHttpRequest.DONE && xhttp.status == 200) {

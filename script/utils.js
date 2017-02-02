@@ -1,9 +1,3 @@
-function clearList(dropdown) {
-    for (var i = 0; i < dropdown.options.length; i++) {
-        dropdown.options[i] = null;
-    }
-}
-
 function newOption(text, value) {
     var option = document.createElement("option");
     option.text = text;
