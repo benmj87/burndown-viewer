@@ -24,6 +24,7 @@ window.onload = function() {
         var projSel = document.getElementById("projectSelect");
         var milestones = getSelectedOptions(e.target);
         var projId = projSel.options[projSel.selectedIndex].value;
+        document.getElementById("projectTitle").innerText = projSel.options[projSel.selectedIndex].text;;
 
         milestoneData = [];
         totalIssueCount = 0;
@@ -87,6 +88,8 @@ function loadMilestonesComplete(allMilestones, projectId) {
         var opt = newOption(allMilestones[i].title, allMilestones[i].id);
         milestoneSelect.appendChild(opt);
     }
+    
+    document.getElementById("milestonesContainer").style.display = "block";
 }
 
 function loadIssuesComplete(issues, milestoneId, projectId) {
@@ -228,6 +231,7 @@ function calculateGraph(milestones, totalPoints) {
             }
         }
 
+        document.getElementById("graphContainer").style.display = "block";
         $.plot("#graph", [ 
             {
                 data: gdata,

@@ -1,0 +1,40 @@
+body {
+    padding: 20px;
+}
+
+h1 {
+    text-align: center;
+    font-size: 28px;
+    font-weight: bold;
+}
+
+#projectSelect {
+    min-width: 35%;
+}
+
+#milestonesContainer {
+    display: none;
+    margin-top: 20px;
+}
+
+#milestoneSelect {
+    height: 60px;
+    min-width: 35%;
+}
+
+#graphContainer {
+    display: none;
+    width: 100%;
+    margin-top: 40px;
+}
+
+#graph {
+    margin: 20px auto;
+    height: 400px; 
+    width: 100%;
+}
+
+#avcoLogo {
+    max-width: 200px;
+    margin-left: 20px;
+}

@@ -14,14 +14,21 @@
         <script type="text/javascript" src="script/app.js"></script>
     </head>
     <body>
-        <h1>Projects</h1>
-        <div>
-            Projects: <select id="projectSelect"></select>
+        <div id="projectContainer">
+            Select a project: <br /> 
+            <select id="projectSelect"></select>
         </div>
-        <div>
-            Milestones: <select id="milestoneSelect" multiple="multiple" style="height: 60px;"></select>
+        <div id="milestonesContainer">
+            Select the project milestones: <br /> 
+            <select id="milestoneSelect" multiple="multiple"></select>
+        </div>
+        
+        <div id="graphContainer">
+            <h1 id="projectTitle"></h1>
+            <div id="graph"></div>
+            
+            <img alt="Avco Systems Ltd" id="avcoLogo" src="avco.png" />
         </div>
 
-        <div id="graph" style="height: 400px; width: 80%; border: solid 1px red;"></div>
     </body>
 </html>
