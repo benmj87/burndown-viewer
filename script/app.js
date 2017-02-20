@@ -166,7 +166,9 @@ function calculateGraph(milestones, totalPoints) {
         var bestAvg = 0;
         var totalDays = 0;
 
-        for (var i = 0; i < milestones.length; i++) {
+        // calculate averages from past 3
+        var start = milestones.length > 3 ? milestones.length - 3 : 0;
+        for (var i = start; i < milestones.length; i++) {
             var avgperday = milestones[i].totalPointsCompleted / getDaysCount(milestones[i].start, milestones[i].end);
             if (worstAvg == 0 || worstAvg > avgperday) {
                 worstAvg = avgperday;
@@ -177,8 +179,11 @@ function calculateGraph(milestones, totalPoints) {
 
             avgForProject += avgperday;
             totalDays++;
+        }
 
-            // plot the milestones 
+        // plot the milestones 
+        for (var i = 0; i < milestones.length; i++) {
+            var avgperday = milestones[i].totalPointsCompleted / getDaysCount(milestones[i].start, milestones[i].end);
             var curDate = milestones[i].start;
             while (curDate <= milestones[i].end) {
                 gdata.push.apply(gdata, [[curDate.getTime(), curpoints]]);
@@ -189,40 +194,69 @@ function calculateGraph(milestones, totalPoints) {
 
         avgForProject = avgForProject / totalDays;    
 
+        var pointsRemaining = curpoints;
+        var curPointsAvg = curpoints;
+        var curPointsWorst = curpoints;
+        var curPointsBest = curpoints;
+        var incompleteAvg = [];
+        var incompleteWorst = [];
+        var incompleteBest = [];
+        var avgCompleteDate = curDate;
+        var bestCompleteDate = curDate;
+        var worstCompleteDate = curDate;
+
         // if any points are left, estimate the remaining and plot the avg, best and worst cases
         if (curpoints > 0) {
-            var curPointsAvg = curpoints;
-            var curPointsWorst = curpoints;
-            var curPointsBest = curpoints;
-            var incompleteAvg = [];
-            var incompleteWorst = [];
-            var incompleteBest = [];
-
             while (curPointsAvg > 0 || curPointsWorst > 0 || curPointsBest > 0) {
                 if (curPointsAvg > 0) {
                     incompleteAvg.push.apply(incompleteAvg, [[curDate.getTime(), curPointsAvg]]);
                     curPointsAvg -= avgForProject;
+                    avgCompleteDate = new Date(curDate.getTime());
                 }
                 if (curPointsWorst > 0) {
                     incompleteWorst.push.apply(incompleteWorst, [[curDate.getTime(), curPointsWorst]]);
                     curPointsWorst -= worstAvg;
+                    worstCompleteDate = new Date(curDate.getTime());
                 }
                 if (curPointsBest > 0) {
                     incompleteBest.push.apply(incompleteBest, [[curDate.getTime(), curPointsBest]]);
                     curPointsBest -= bestAvg;
+                    bestCompleteDate = new Date(curDate.getTime());
                 }
 
                 curDate.setDate(curDate.getDate() + 1);
             }
         }
 
-        $.plot("#graph", [ gdata, incompleteAvg, incompleteWorst, incompleteBest ], {
-            xaxis: {
-                mode: 'time',
-                minTickSize: [1, 'day'],
-                timeformat: '%d/%m/%y'
-            }
-        });
+        $.plot("#graph", [ 
+            {
+                data: gdata,
+                label: "Completed"
+            },
+            {
+                data: incompleteAvg,
+                color: "blue",
+                label: "Average (" + avgCompleteDate.getDate() + "/" + (avgCompleteDate.getMonth()+1) + "/" + avgCompleteDate.getFullYear() + ")"
+            },
+            {
+                data: incompleteWorst,
+                color: "red",
+                label: "Worst (" + worstCompleteDate.getDate() + "/" + (worstCompleteDate.getMonth()+1) + "/" + worstCompleteDate.getFullYear() + ")"
+            }, 
+            {
+                data: incompleteBest,
+                color: "green",
+                label: "Best (" + bestCompleteDate.getDate() + "/" + (bestCompleteDate.getMonth()+1) + "/" + bestCompleteDate.getFullYear() + ")"
+            }], 
+            {
+                xaxis: {
+                    mode: 'time',
+                    timeformat: '%d/%m'
+                },
+                yaxis: {
+                    label: "Points (" + pointsRemaining + " remaining)"
+                }
+            });
     }
 }
 
