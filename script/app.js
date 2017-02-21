@@ -9,6 +9,7 @@ window.onload = function() {
     loadSettings();
 
     document.getElementById("projectSelect").onchange = function(e) {
+        document.getElementById("spinner").style.display = "inline";
         $.plot("#graph", [], {}); // clear the graph
         document.getElementById("milestoneSelect").options.length = 0; // clear milestones
 
@@ -19,6 +20,7 @@ window.onload = function() {
     }
 
     document.getElementById("milestoneSelect").onchange = function(e) {
+        document.getElementById("spinner").style.display = "inline";
         $.plot("#graph", [], {}); // clear the graph
         
         var projSel = document.getElementById("projectSelect");
@@ -52,6 +54,7 @@ window.onload = function() {
 }
 
 function loadSettings() {
+    document.getElementById("spinner").style.display = "inline";
     console.log("Loading settings from apikey.json");
 
     var xhttp = new XMLHttpRequest();
@@ -79,6 +82,8 @@ function loadProjectsComplete(allProjects) {
         var opt = newOption(allProjects[i].name_with_namespace, allProjects[i].id);
         projSelect.appendChild(opt);
     }
+
+    document.getElementById("spinner").style.display = "none";
 }
 
 function loadMilestonesComplete(allMilestones, projectId) {
@@ -90,6 +95,7 @@ function loadMilestonesComplete(allMilestones, projectId) {
     }
     
     document.getElementById("milestonesContainer").style.display = "block";
+    document.getElementById("spinner").style.display = "none";
 }
 
 function loadIssuesComplete(issues, milestoneId, projectId) {
@@ -210,6 +216,11 @@ function calculateGraph(milestones, totalPoints) {
 
         // if any points are left, estimate the remaining and plot the avg, best and worst cases
         if (curpoints > 0) {
+            while (curDate.getTime() <= Date.now()) {
+                gdata.push.apply(gdata, [[curDate.getTime(), curpoints]]);
+                curDate.setDate(curDate.getDate() + 1);
+            }
+
             while (curPointsAvg > 0 || curPointsWorst > 0 || curPointsBest > 0) {
                 if (curPointsAvg > 0) {
                     incompleteAvg.push.apply(incompleteAvg, [[curDate.getTime(), curPointsAvg]]);
@@ -261,6 +272,8 @@ function calculateGraph(milestones, totalPoints) {
                     label: "Points (" + pointsRemaining + " remaining)"
                 }
             });
+
+        document.getElementById("spinner").style.display = "none";
     }
 }
 
