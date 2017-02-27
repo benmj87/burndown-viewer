@@ -1,0 +1,8 @@
+version: '2'
+services:
+    nginx:
+        container_name: burndown-viewer
+        ports:
+            - "1080:80"
+        build: 
+            context: ./
