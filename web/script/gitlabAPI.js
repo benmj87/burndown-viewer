@@ -29,7 +29,7 @@ class GitlabAPI {
             }
         };
 
-        xhttp.open("GET", this.apiUrl + '/projects/all?page=' + this.currentProjectPage, true);
+        xhttp.open("GET", this.apiUrl + '/projects/all?simple=true&order_by=name&page=' + this.currentProjectPage, true);
         xhttp.setRequestHeader("PRIVATE-TOKEN", this.apiKey);
         xhttp.send();
     }
